@@ -9,9 +9,9 @@
 #include <Arduino.h>
 #include <TMCStepper.h>
 
-#define EN_PIN           34 // Enable
-#define STEP_PIN         33 // Step
-#define DIR_PIN          32 // Direction
+#define EN_PIN           19  // Enable
+#define STEP_PIN         18  // Step
+#define DIR_PIN          5  // Direction
 // #define CS_PIN           42 // Chip select
 // #define SW_MOSI          66 // Software Master Out Slave In (MOSI)
 // #define SW_MISO          44 // Software Master In Slave Out (MISO)
@@ -41,6 +41,7 @@ TMC2208Stepper driver(&SERIAL_PORT, R_SENSE);                     // Hardware Se
 //TMC2209Stepper driver(SW_RX, SW_TX, R_SENSE, DRIVER_ADDRESS);
 
 void setup() {
+  return;
   pinMode(EN_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
@@ -66,12 +67,12 @@ bool shaft = false;
 
 void loop() {
   // Run 5000 steps and switch direction in software
-  // for (uint16_t i = 5000; i>0; i--) {
-  //   digitalWrite(STEP_PIN, HIGH);
-  //   delayMicroseconds(160);
-  //   digitalWrite(STEP_PIN, LOW);
-  //   delayMicroseconds(160);
-  // }
-  // shaft = !shaft;
-  // driver.shaft(shaft);
+  for (uint16_t i = 5000; i>0; i--) {
+    digitalWrite(STEP_PIN, HIGH);
+    delayMicroseconds(160);
+    digitalWrite(STEP_PIN, LOW);
+    delayMicroseconds(160);
+  }
+  shaft = !shaft;
+  driver.shaft(shaft);
 }
