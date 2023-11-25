@@ -13,6 +13,8 @@
 #define STEP_PIN         18
 #define DIR_PIN          5
 #define SERIAL_PORT Serial2
+#define DRIVER_ADDRESS 0b00 // TMC2209 Driver address according to MS1 and MS2
+
 
 #define R_SENSE 0.11f // Match to your driver
                       // SilentStepStick series use 0.11
@@ -20,7 +22,7 @@
                       // Panucatt BSD2660 uses 0.1
                       // Watterott TMC5160 uses 0.075
 
-TMC2208Stepper driver(&SERIAL_PORT, R_SENSE);
+TMC2209Stepper driver(&SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
 
 void setup() {
   pinMode(EN_PIN, OUTPUT);
