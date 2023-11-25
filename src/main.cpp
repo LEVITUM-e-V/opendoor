@@ -15,9 +15,8 @@
 // diag pin pulsed HIGH when SG_RESULT falls below 2*STALL_VALUE
 // must be in StealthChop Mode for stallguard to work
 // Value of TCOOLTHRS must be greater than TSTEP & TPWMTHRS
-#define STALL_VALUE 50 // [0..255]
+#define STALL_VALUE 12 // [0..255]
 int stepTime = 160;
-bool startup = true; // set false after homing
 
 TMC2209Stepper driver(&SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
 bool shaftVal = false;
@@ -27,8 +26,7 @@ void stallInterruptX() { // flag set when motor stalls
   stalled_X = true;
 }
 
-void motor(int steps, int stepDelay);
-void homeX();
+void run_until_stalled(bool dir);
 
 void setup() {
   pinMode(EN_PIN, OUTPUT);
@@ -42,7 +40,7 @@ void setup() {
   driver.begin(); // SPI: Init CS pins and possible SW SPI pins
   driver.toff(4); // Enables driver in software, changed from 5
   driver.blank_time(24);
-  driver.rms_current(400); // Set motor RMS current
+  driver.rms_current(600); // Set motor RMS current
   driver.microsteps(16);   // Set microsteps to 1/16th
 
   // driver.en_pwm_mode(true); // Toggle stealthChop on TMC2130/2160/5130/5160
@@ -60,73 +58,26 @@ void setup() {
 }
 
 void loop() {
-  if (startup) { // home on starting up
-    startup = false;
-    homeX();
-  }
-
-  if (stalled_X) {
-    int backSteps = 1000;
-    Serial.println("stalled");
-    stalled_X = false;
-    shaftVal = !shaftVal;
-    motor(backSteps, 160);
-  }
-
-  if (Serial.available() > 0) {
-    char readVal = Serial.read();
-    if (readVal == 'x') {
-      int steps = Serial.parseInt();
-      if (steps < 0) {
-        shaftVal = true;
-        steps *= -1;
-      } else {
-        shaftVal = false;
-      }
-      motor(steps, 160);
-    } else if (readVal == 'h') {
-      homeX();
-    }
+  while (1) {
+    run_until_stalled(true);
+    delay(2000);
+    run_until_stalled(false);
+    delay(5000);
   }
 }
 
-void homeX() {
-  int homeDelay = 160;
-  int backSteps = 5000;
-  Serial.println("fast homing x");
-  shaftVal = true;
-  while (!stalled_X) { // fast home x
-    motor(1000, homeDelay);
-  }
-  stalled_X = false;
-  delay(1000);
-  Serial.println("backing off");
-  shaftVal = false;
-  motor(backSteps, homeDelay);
-
-  Serial.println("slow homing x");
-  shaftVal = true;
-  while (!stalled_X) { // slow home x
-    motor(1000, homeDelay * 2);
-  }
-  stalled_X = false;
-  delay(1000);
-  Serial.println("backing off");
-  shaftVal = false;
-  motor(backSteps, homeDelay);
-}
-
-void motor(int steps, int stepDelay) {
+void run_until_stalled(bool dir) {
+  int delay = 500;
+  Serial.println("running until stalled");
   digitalWrite(EN_PIN, LOW);
-  driver.shaft(shaftVal);
-  for (int i = 0; i < steps; i++) {
+  driver.shaft(dir);
+  while (!stalled_X) {
     digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(stepDelay);
+    delayMicroseconds(delay);
     digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(stepDelay);
-    if (stalled_X) {
-      i = steps;
-    }
+    delayMicroseconds(delay);
   }
+  stalled_X = false;
   digitalWrite(EN_PIN, HIGH);
+  Serial.println("stalled");
 }
