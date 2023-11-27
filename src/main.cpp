@@ -14,7 +14,7 @@ constexpr auto STEP_PIN{18};
 constexpr auto STALL_PIN{5};
 constexpr auto DRIVER_ADDRESS{0b00};
 constexpr auto R_SENSE{0.11f};
-constexpr auto STALL_VALUE{6}; // [0..255], higher -> increases stall sensitivity
+constexpr auto STALL_VALUE{7}; // [0..255], higher -> increases stall sensitivity
 
 auto SERIAL_PORT{Serial2};
 
@@ -71,7 +71,7 @@ void loop() {
 }
 
 void run_until_stalled(bool dir) {
-  int delay = 50;
+  int delay = 70;
   Serial.println("running until stalled");
   digitalWrite(EN_PIN, LOW);
   driver.shaft(dir);
