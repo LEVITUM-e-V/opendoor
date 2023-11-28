@@ -9,7 +9,6 @@ auto SERIAL_PORT{Serial2};
 bool DoorActuator::setup() {
   pinMode(EN_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
-  pinMode(STALL_PIN, INPUT);
 
   if (!SERIAL_PORT.available()) {
     return false;
@@ -36,7 +35,6 @@ bool DoorActuator::setup() {
   _driver.TCOOLTHRS(0xFFFFF);
   _driver.TPWMTHRS(0);
   _driver.SGTHRS(_stall_thrs);
-  attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
   digitalWrite(EN_PIN, HIGH); // disable driver for now
   return true;
 }
@@ -59,6 +57,7 @@ int DoorActuator::rotate(
     delayMicroseconds(_delay_step);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(_delay_step);
+    ++step_counter;
   }
 
   digitalWrite(EN_PIN, HIGH);

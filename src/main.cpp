@@ -4,7 +4,8 @@
 DoorActuator door(7, 70);
 void setup() {
   Serial.begin(115200);
-
+  pinMode(STALL_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
   door.setup();
 }
 
