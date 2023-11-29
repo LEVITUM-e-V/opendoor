@@ -5,8 +5,6 @@
 
 #include "door_actuator.h"
 
-auto SERIAL_PORT{Serial2};
-
 bool DoorActuator::setup() {
   pinMode(EN_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
@@ -47,7 +45,8 @@ void DoorActuator::notify_stalled() {
 uint32_t DoorActuator::rotate(
     std::optional<const uint32_t> steps,
     const DoorPosition direction,
-    const bool stallguard
+    const bool stallguard,
+    const uint32_t step_delay
     ) {
   uint32_t step_counter = 0;
 
@@ -63,9 +62,9 @@ uint32_t DoorActuator::rotate(
       break;
     }
     digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(_delay_step);
+    delayMicroseconds(step_delay);
     digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(_delay_step);
+    delayMicroseconds(step_delay);
     ++step_counter;
   }
 
@@ -105,7 +104,7 @@ bool DoorActuator::open() {
     return true;
   }
   this->_position = std::nullopt;
-  this->rotate(std::optional(this->_way_steps), DoorPosition::OPEN, false);
+  this->rotate(std::optional(this->_way_steps), DoorPosition::OPEN, false, 40);
   this->_position = DoorPosition::OPEN;
   return true;
 }

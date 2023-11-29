@@ -21,10 +21,9 @@ class DoorActuator {
   public:
 
 
-    DoorActuator(Stream* serial, uint8_t stall_thrs, uint32_t delay_step):
+    DoorActuator(Stream* serial, uint8_t stall_thrs):
       _driver(serial, R_SENSE, DRIVER_ADDRESS),
-      _stall_thrs{stall_thrs},
-      _delay_step{delay_step}
+      _stall_thrs{stall_thrs}
     {};
 
     bool setup();
@@ -43,10 +42,14 @@ class DoorActuator {
     bool close();
 
   private:
-    uint32_t rotate(std::optional<const uint32_t> steps, const DoorPosition direction, const bool stallguard = true);
+    uint32_t rotate(
+        std::optional<const uint32_t> steps,
+        const DoorPosition direction,
+        const bool stallguard = true,
+        const uint32_t step_delay = 70
+        );
     TMC2209Stepper _driver;
     uint8_t _stall_thrs;
-    uint32_t _delay_step;
     const uint32_t _way_steps = 73000; //TODO: make this configureable
     bool _stalled = false;
     bool _homed = false;
