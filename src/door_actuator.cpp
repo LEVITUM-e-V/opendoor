@@ -54,7 +54,7 @@ int DoorActuator::rotate(
   _driver.shaft(direction != Direction::OPEN);
 
   _stalled = false;
-  while (!_stalled) {
+  while (!_stalled || !stallguard) {
     if (steps && step_counter >= steps.value()) {
       break;
     }

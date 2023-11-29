@@ -18,10 +18,15 @@ void setup() {
 }
 
 void loop() {
+  int steps;
   while (1) {
-    door.rotate_infinite(Direction::OPEN);
+    steps = door.rotate(73000, Direction::OPEN);
+    Serial.print("steps: ");
+    Serial.println(steps);
     delay(2000);
-    door.rotate_infinite(Direction::CLOSE);
+    steps = door.rotate(73000, Direction::CLOSE);
+    Serial.print("steps: ");
+    Serial.println(steps);
     delay(2000);
   }
 }
