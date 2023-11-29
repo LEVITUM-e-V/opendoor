@@ -50,8 +50,11 @@ int DoorActuator::rotate(
     ) {
   uint32_t step_counter = 0;
 
-  digitalWrite(EN_PIN, LOW);
   _driver.shaft(direction != Direction::OPEN);
+  _driver.rms_current(400);
+  _driver.TPWMTHRS(0);
+  _driver.SGTHRS(_stall_thrs);
+  digitalWrite(EN_PIN, LOW);
 
   _stalled = false;
   while (!_stalled || !stallguard) {
