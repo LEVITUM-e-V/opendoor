@@ -32,11 +32,16 @@ bool DoorActuator::setup() {
   _driver.semin(0);
   _driver.semax(2);
   _driver.sedn(0b01);
+  _driver.shaft(false);
   _driver.TCOOLTHRS(0xFFFFF);
   _driver.TPWMTHRS(0);
   _driver.SGTHRS(_stall_thrs);
   digitalWrite(EN_PIN, HIGH); // disable driver for now
   return true;
+}
+
+void DoorActuator::notify_stalled() {
+  _stalled = true;
 }
 
 int DoorActuator::rotate(
@@ -49,7 +54,8 @@ int DoorActuator::rotate(
   digitalWrite(EN_PIN, LOW);
   _driver.shaft(direction == Direction::OPEN ? true : false);
 
-  while (!STALLED) {
+  _stalled = false;
+  while (!_stalled) {
     if (steps && step_counter >= steps.value()) {
       break;
     }

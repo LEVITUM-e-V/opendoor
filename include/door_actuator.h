@@ -14,12 +14,6 @@ enum Direction {
   CLOSE
 };
 
-static bool STALLED = true;
-
-#pragma GCC diagnostic ignored "-Wunused-function"
-static void IRAM_ATTR stall_guard() {
-  STALLED = true;
-}
 
 class DoorActuator {
 
@@ -40,8 +34,11 @@ class DoorActuator {
 
     int rotate(std::optional<const uint32_t> steps, const Direction direction, const bool stallguard = true);
 
+    void notify_stalled();
+
   private:
     TMC2209Stepper _driver;
     uint8_t _stall_thrs;
     uint32_t _delay_step;
+    bool _stalled = false;
 };
