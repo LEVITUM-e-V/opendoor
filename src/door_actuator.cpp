@@ -10,11 +10,8 @@ bool DoorActuator::setup() {
   pinMode(EN_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
 
-  if (!SERIAL_PORT.available()) {
-    return false;
-  }
+  digitalWrite(EN_PIN, HIGH); // disable driver for now
 
-  SERIAL_PORT.begin(115200); // HW UART drivers
 
   _driver.begin();
   _driver.toff(4);
@@ -36,7 +33,9 @@ bool DoorActuator::setup() {
   _driver.TCOOLTHRS(0xFFFFF);
   _driver.TPWMTHRS(0);
   _driver.SGTHRS(_stall_thrs);
-  digitalWrite(EN_PIN, HIGH); // disable driver for now
+
+  Serial.print("driver version: ");
+  Serial.println(_driver.version());
   return true;
 }
 
@@ -52,7 +51,7 @@ int DoorActuator::rotate(
   uint32_t step_counter = 0;
 
   digitalWrite(EN_PIN, LOW);
-  _driver.shaft(direction == Direction::OPEN ? true : false);
+  _driver.shaft(direction != Direction::OPEN);
 
   _stalled = false;
   while (!_stalled) {

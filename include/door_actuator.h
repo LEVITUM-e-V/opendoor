@@ -20,8 +20,8 @@ class DoorActuator {
   public:
 
 
-    DoorActuator(uint8_t stall_thrs, uint32_t delay_step):
-      _driver((Stream*) &Serial2, R_SENSE, DRIVER_ADDRESS),
+    DoorActuator(Stream* serial, uint8_t stall_thrs, uint32_t delay_step):
+      _driver(serial, R_SENSE, DRIVER_ADDRESS),
       _stall_thrs{stall_thrs},
       _delay_step{delay_step}
     {};
