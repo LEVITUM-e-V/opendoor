@@ -8,6 +8,8 @@ static void IRAM_ATTR stall_guard() {
   door.notify_stalled();
 }
 
+bool homed = false;
+
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200); // HW UART drivers
@@ -15,18 +17,23 @@ void setup() {
   while(!Serial2); //wait for hardware serial
   door.setup();
   attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
+
+  homed = door.home();
 }
 
 void loop() {
-  int steps;
-  while (1) {
-    steps = door.rotate(73000, Direction::OPEN);
-    Serial.print("steps: ");
-    Serial.println(steps);
+  if (!homed) {
     delay(2000);
-    steps = door.rotate(73000, Direction::CLOSE);
-    Serial.print("steps: ");
-    Serial.println(steps);
+    return;
+  }
+  while (1) {
+    Serial.print("opening... ");
+    door.open();
+    Serial.println("done");
+    delay(2000);
+    Serial.print("closing... ");
+    door.close();
+    Serial.println("done");
     delay(2000);
   }
 }

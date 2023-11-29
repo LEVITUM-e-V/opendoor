@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <TMCStepper.h>
 #include <cstdint>
+#include <optional>
 
 #include "door_actuator.h"
 
@@ -43,21 +44,21 @@ void DoorActuator::notify_stalled() {
   _stalled = true;
 }
 
-int DoorActuator::rotate(
+uint32_t DoorActuator::rotate(
     std::optional<const uint32_t> steps,
-    const Direction direction,
+    const DoorPosition direction,
     const bool stallguard
     ) {
   uint32_t step_counter = 0;
 
-  _driver.shaft(direction != Direction::OPEN);
+  _driver.shaft(direction != DoorPosition::OPEN);
   _driver.rms_current(400);
   _driver.TPWMTHRS(0);
   _driver.SGTHRS(_stall_thrs);
   digitalWrite(EN_PIN, LOW);
 
   _stalled = false;
-  while (!_stalled || !stallguard) {
+  while (!(stallguard && _stalled)) {
     if (steps && step_counter >= steps.value()) {
       break;
     }
@@ -70,4 +71,54 @@ int DoorActuator::rotate(
 
   digitalWrite(EN_PIN, HIGH);
   return step_counter;
+}
+
+bool DoorActuator::home(bool force) {
+  _position = std::nullopt;
+  Serial.println("trying to go to close position");
+  this->rotate(std::nullopt, DoorPosition::CLOSE, true);
+  Serial.println("counting steps to open position");
+  const uint32_t steps = this->rotate(std::nullopt, DoorPosition::OPEN, true);
+
+  if (steps < _way_steps) {
+    Serial.println("way steps not reached");
+    // we failed, either left or right is wrong
+    if (!force) {
+      this->_homed = false;
+      return false;
+    }
+    //this will eventually break the motor. Let's hope for the best
+    Serial.println("force homing");
+    this->rotate(std::optional(this->_way_steps), DoorPosition::OPEN, false);
+  }
+  Serial.println("door is homed");
+  this->_homed = true;
+  this->_position = std::optional(DoorPosition::OPEN);
+  return true;
+}
+
+bool DoorActuator::open() {
+  if (!this->_homed) {
+    return false;
+  }
+  if (this->_position == DoorPosition::OPEN) {
+    return true;
+  }
+  this->_position = std::nullopt;
+  this->rotate(std::optional(this->_way_steps), DoorPosition::OPEN, false);
+  this->_position = DoorPosition::OPEN;
+  return true;
+}
+
+bool DoorActuator::close() {
+  if (!this->_homed) {
+    return false;
+  }
+  if (this->_position == DoorPosition::CLOSE) {
+    return true;
+  }
+  this->_position = std::nullopt;
+  this->rotate(std::optional(this->_way_steps), DoorPosition::CLOSE, false);
+  this->_position = DoorPosition::CLOSE;
+  return true;
 }
