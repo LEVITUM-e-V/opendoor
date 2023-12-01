@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "door_actuator.h"
 
-DoorActuator door(&Serial2, 8);
+DoorActuator door(&Serial2, 10);
 
 #pragma GCC diagnostic ignored "-Wunused-function"
 static void IRAM_ATTR stall_guard() {
@@ -26,7 +26,7 @@ void loop() {
     delay(2000);
     return;
   }
-  while (1) {
+  while (0) {
     Serial.print("opening... ");
     door.open();
     Serial.println("done");

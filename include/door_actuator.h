@@ -50,7 +50,8 @@ class DoorActuator {
         );
     TMC2209Stepper _driver;
     uint8_t _stall_thrs;
-    const uint32_t _way_steps = 73000; //TODO: make this configureable
+    const uint32_t _way_steps = 125000; //TODO: make this configureable
+    const uint32_t _edge_distance = 10000; //TODO: make this configureable
     bool _stalled = false;
     bool _homed = false;
     std::optional<DoorPosition> _position = std::nullopt;

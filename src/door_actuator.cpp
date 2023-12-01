@@ -79,6 +79,8 @@ bool DoorActuator::home(bool force) {
   Serial.println("counting steps to open position");
   const uint32_t steps = this->rotate(std::nullopt, DoorPosition::OPEN, true);
 
+  Serial.print("steps: ");
+  Serial.println(steps);
   if (steps < _way_steps) {
     Serial.println("way steps not reached");
     // we failed, either left or right is wrong
@@ -93,6 +95,7 @@ bool DoorActuator::home(bool force) {
   Serial.println("door is homed");
   this->_homed = true;
   this->_position = std::optional(DoorPosition::OPEN);
+  this->rotate(std::optional(_edge_distance), DoorPosition::CLOSE, false, 40);
   return true;
 }
 
@@ -104,7 +107,7 @@ bool DoorActuator::open() {
     return true;
   }
   this->_position = std::nullopt;
-  this->rotate(std::optional(this->_way_steps), DoorPosition::OPEN, false, 40);
+  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::OPEN, false, 40);
   this->_position = DoorPosition::OPEN;
   return true;
 }
@@ -117,7 +120,7 @@ bool DoorActuator::close() {
     return true;
   }
   this->_position = std::nullopt;
-  this->rotate(std::optional(this->_way_steps), DoorPosition::CLOSE, false);
+  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::CLOSE, false);
   this->_position = DoorPosition::CLOSE;
   return true;
 }
