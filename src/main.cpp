@@ -1,11 +1,12 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <cstdint>
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
 
-static void mqtt_callback(char *topic, byte *payload, unsigned int length);
+void mqtt_callback(char *topic, uint8_t *payload, unsigned int length);
 
 WiFiClient wifi;
 PubSubClient mqtt(MQTT_SERVER, MQTT_PORT, mqtt_callback, wifi);
@@ -19,12 +20,6 @@ static void IRAM_ATTR stall_guard() {
 
 void setup() {
   Serial.begin(115200);
-  Serial2.begin(115200); // HW UART drivers
-  pinMode(STALL_PIN, INPUT);
-  while(!Serial2); //wait for hardware serial
-  door.setup();
-  attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
-
   delay(1000);
   WiFi.begin(WIFI_SSID, WIFI_PSK);
 
@@ -37,6 +32,11 @@ void setup() {
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
   }
+
+  Serial2.begin(115200); // HW UART drivers
+  pinMode(STALL_PIN, INPUT);
+  door.setup();
+  attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
 }
 
 void loop() {
@@ -59,18 +59,28 @@ void loop() {
     }
   }
 
+  mqtt.loop();
+
 }
 
-static void  mqtt_callback(char *topic, byte *payload, unsigned int length) {
+void  mqtt_callback(char *topic, uint8_t *payload, unsigned int length) {
+  Serial.println("mqtt callback");
   if (strcmp(topic, "door/command") == 0) {
-    if (payload[length-1] != '\0') {
-      Serial.println("command payload is not null-terminated.");
+    String command;
+  
+    for (int i = 0; i < length; i++) {
+      Serial.print((char)payload[i]);
+      command += (char)payload[i];
     }
-    if (strcmp((char*) payload, "open") == 0) {
+    Serial.println();
+    if (strncmp((char*) payload, "open", length) == 0) {
+      Serial.println("opening door");
       door.open();
-    } else if (strcmp((char*) payload, "close") == 0) {
+    } else if (strncmp((char*) payload, "close", length) == 0) {
+      Serial.println("closing door");
       door.close();
-    } else if (strcmp((char*) payload, "home") == 0) {
+    } else if (strncmp((char*) payload, "home", length) == 0) {
+      Serial.println("homing door");
       door.home();
     } else {
       Serial.println("command unknown");
