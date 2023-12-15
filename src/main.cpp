@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <cstdint>
+#include <cstring>
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
@@ -20,35 +21,59 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
   Serial.print("received ");
   Serial.print(len);
   Serial.println(" bytes");
-  client->write(reinterpret_cast<const char*>(data), len);
-  client->send();
 
-  char* e = strstr(reinterpret_cast<char*>(data), "\n");
-  size_t idx = e - (char*) data;
+  if (len < 1) {
+    return;
+  }
+
+  char* payload = reinterpret_cast<char*>(data);
+
+  if (payload[len-1] != '\0') {
+    payload[len-1] = '\0';
+  }
+  //remove newline
+  char *pch = strstr(payload, "\n");
+  if(pch != NULL)
+    strncpy(pch, "\0", 1);
   
-  if (strncmp((char*) data, "open", idx) == 0) {
-    client->write("opening door");
+  if (strncmp(payload, "open", len) == 0) {
+    client->write("opening door...");
     Serial.println("opening door");
     door.open();
-  } else if (strncmp((char*) data, "close", idx) == 0) {
-    client->write("closing door");
+  } else if (strncmp(payload, "close", len) == 0) {
+    client->write("closing door...");
     Serial.println("closing door");
     door.close();
-  } else if (strncmp((char*) data, "home", idx) == 0) {
-    client->write("homing door");
+  } else if (strncmp(payload, "home", len) == 0) {
+    client->write("homing door...");
     Serial.println("homing door");
     door.home();
+  } else if (strncmp(payload, "status", len) == 0) {
+    std::optional<DoorPosition> pos = door.get_position();
+    client->write("position: ");
+    Serial.print("position: ");
+
+    if (!pos.has_value()) {
+      client->write("unknown\n");
+      Serial.println("unknown");
+    } else {
+      const char* name = position_name(pos.value());
+      client->write(name);
+      client->write("\n");
+      Serial.println(name);
+    }
+
   } else {
+    client->write("unknown command\n");
     Serial.println("unknown command");
-    client->write("unknown command");
   }
-  client->write("done");
-  client->close();
+  client->write("done\n");
+  client->send();
 }
 
 void handleClient(void *arg, AsyncClient* client) {
   Serial.println("got client");
-  client->write("hey\n");
+  client->write("hey you. I'm a door\n");
   client->send();
   client->onData(handleData);
 }

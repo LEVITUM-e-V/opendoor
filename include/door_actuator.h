@@ -10,10 +10,14 @@ constexpr static auto STALL_PIN{5};
 constexpr static auto DRIVER_ADDRESS{0b00};
 constexpr static auto R_SENSE{0.11f};
 
-enum DoorPosition {
+enum class DoorPosition {
   OPEN,
   CLOSE
 };
+
+static const char* position_name(DoorPosition pos) {
+  return pos == DoorPosition::OPEN ? "open" : "close";
+}
 
 
 class DoorActuator {
@@ -32,6 +36,9 @@ class DoorActuator {
       return this->rotate(std::nullopt, direction, true);
     }
 
+    std::optional<DoorPosition> get_position() {
+      return _position;
+    }
 
     void notify_stalled();
 
