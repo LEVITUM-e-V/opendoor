@@ -48,6 +48,14 @@ class DoorActuator {
 
     bool close();
 
+    bool _stalled = false;
+    bool _homed = false;
+    const uint32_t _way_steps = 125000; //TODO: make this configureable
+    const uint32_t _edge_distance = 10000; //TODO: make this configureable
+    std::optional<DoorPosition> _position = std::nullopt;
+    TMC2209Stepper _driver;
+    uint8_t _stall_thrs;
+
   private:
     uint32_t rotate(
         std::optional<const uint32_t> steps,
@@ -55,11 +63,4 @@ class DoorActuator {
         const bool stallguard = true,
         const uint32_t step_delay = 70
         );
-    TMC2209Stepper _driver;
-    uint8_t _stall_thrs;
-    const uint32_t _way_steps = 125000; //TODO: make this configureable
-    const uint32_t _edge_distance = 10000; //TODO: make this configureable
-    bool _stalled = false;
-    bool _homed = false;
-    std::optional<DoorPosition> _position = std::nullopt;
 };
