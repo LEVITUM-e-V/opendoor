@@ -1,15 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <AsyncTCP.h>
 #include <cstdint>
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
 
-void mqtt_callback(char *topic, uint8_t *payload, unsigned int length);
 
+AsyncServer server(PORT);
 WiFiClient wifi;
-PubSubClient mqtt(MQTT_SERVER, MQTT_PORT, mqtt_callback, wifi);
 DoorActuator door(&Serial2, 10);
 
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -17,6 +16,42 @@ static void IRAM_ATTR stall_guard() {
   door.notify_stalled();
 }
 
+void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
+  Serial.print("received ");
+  Serial.print(len);
+  Serial.println(" bytes");
+  client->write(reinterpret_cast<const char*>(data), len);
+  client->send();
+
+  char* e = strstr(reinterpret_cast<char*>(data), "\n");
+  size_t idx = e - (char*) data;
+  
+  if (strncmp((char*) data, "open", idx) == 0) {
+    client->write("opening door");
+    Serial.println("opening door");
+    door.open();
+  } else if (strncmp((char*) data, "close", idx) == 0) {
+    client->write("closing door");
+    Serial.println("closing door");
+    door.close();
+  } else if (strncmp((char*) data, "home", idx) == 0) {
+    client->write("homing door");
+    Serial.println("homing door");
+    door.home();
+  } else {
+    Serial.println("unknown command");
+    client->write("unknown command");
+  }
+  client->write("done");
+  client->close();
+}
+
+void handleClient(void *arg, AsyncClient* client) {
+  Serial.println("got client");
+  client->write("hey\n");
+  client->send();
+  client->onData(handleData);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -37,53 +72,14 @@ void setup() {
   pinMode(STALL_PIN, INPUT);
   door.setup();
   attachInterrupt(digitalPinToInterrupt(STALL_PIN), stall_guard, RISING);
+
+  server.onClient(handleClient, NULL);
+  server.begin();
 }
 
 void loop() {
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-  }
-
-
-  while (!mqtt.connected()) {
-    if (mqtt.connect("door", MQTT_USER, MQTT_PSK, "door/status", 1, true, "offline")) {
-      mqtt.subscribe("door/command");
-      mqtt.publish("door/status", "online", true);
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(mqtt.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-
-  mqtt.loop();
-
-}
-
-void  mqtt_callback(char *topic, uint8_t *payload, unsigned int length) {
-  Serial.println("mqtt callback");
-  if (strcmp(topic, "door/command") == 0) {
-    String command;
-  
-    for (int i = 0; i < length; i++) {
-      Serial.print((char)payload[i]);
-      command += (char)payload[i];
-    }
-    Serial.println();
-    if (strncmp((char*) payload, "open", length) == 0) {
-      Serial.println("opening door");
-      door.open();
-    } else if (strncmp((char*) payload, "close", length) == 0) {
-      Serial.println("closing door");
-      door.close();
-    } else if (strncmp((char*) payload, "home", length) == 0) {
-      Serial.println("homing door");
-      door.home();
-    } else {
-      Serial.println("command unknown");
-    }
   }
 }

@@ -3,9 +3,6 @@
 constexpr const auto WIFI_SSID{""};
 constexpr const auto WIFI_PSK{""};
 
-constexpr const auto MQTT_SERVER{""};
-constexpr const auto MQTT_PORT{8883};
-constexpr const auto MQTT_USER{""};
-constexpr const auto MQTT_PSK{""};
+constexpr const auto PORT{1337};
 
 
