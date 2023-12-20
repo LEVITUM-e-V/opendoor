@@ -37,37 +37,23 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
     strncpy(pch, "\0", 1);
   
   if (strncmp(payload, "open", len) == 0) {
-    client->write("opening door...");
-    Serial.println("opening door");
+    client->write("opening door\n");
     door.open();
   } else if (strncmp(payload, "close", len) == 0) {
-    client->write("closing door...");
-    Serial.println("closing door");
+    client->write("closing door\n");
     door.close();
   } else if (strncmp(payload, "home", len) == 0) {
-    client->write("homing door...");
-    Serial.println("homing door");
+    client->write("homing door\n");
     door.home();
   } else if (strncmp(payload, "status", len) == 0) {
-    std::optional<DoorPosition> pos = door.get_position();
-    client->write("position: ");
-    Serial.print("position: ");
-
-    if (!pos.has_value()) {
-      client->write("unknown\n");
-      Serial.println("unknown");
-    } else {
-      const char* name = position_name(pos.value());
-      client->write(name);
-      client->write("\n");
-      Serial.println(name);
-    }
+    DoorState state = door.get_state();
+    client->write("state: ");
+    client->write(state_name(state));
+    client->write("\n");
 
   } else {
     client->write("unknown command\n");
-    Serial.println("unknown command");
   }
-  client->write("done\n");
   client->send();
 }
 

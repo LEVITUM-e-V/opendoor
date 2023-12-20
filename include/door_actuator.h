@@ -15,8 +15,32 @@ enum class DoorPosition {
   CLOSE
 };
 
-static const char* position_name(DoorPosition pos) {
-  return pos == DoorPosition::OPEN ? "open" : "close";
+enum class DoorState {
+  UNKNOWN,
+  HOMING,
+  OPEN,
+  CLOSING,
+  CLOSED,
+  OPENING
+};
+
+static const char* state_name(DoorState state) {
+  switch (state) {
+    case DoorState::UNKNOWN:
+      return "unknown/failed";
+    case DoorState::HOMING:
+      return "homing";
+    case DoorState::OPEN:
+      return "open";
+    case DoorState::CLOSING:
+      return "closing";
+    case DoorState::CLOSED:
+      return "closed";
+    case DoorState::OPENING:
+      return "opening";
+    default:
+      return "unknown state";
+  }
 }
 
 
@@ -28,7 +52,14 @@ class DoorActuator {
     DoorActuator(Stream* serial, uint8_t stall_thrs):
       _driver(serial, R_SENSE, DRIVER_ADDRESS),
       _stall_thrs{stall_thrs}
-    {};
+    {
+      _mutex = xSemaphoreCreateMutex();
+    };
+
+    ~DoorActuator()
+    {
+      vSemaphoreDelete(_mutex);
+    }
 
     bool setup();
 
@@ -36,8 +67,8 @@ class DoorActuator {
       return this->rotate(std::nullopt, direction, true);
     }
 
-    std::optional<DoorPosition> get_position() {
-      return _position;
+    DoorState get_state() {
+      return _state;
     }
 
     void notify_stalled();
@@ -49,12 +80,13 @@ class DoorActuator {
     bool close();
 
     bool _stalled = false;
-    bool _homed = false;
+    DoorState _state = DoorState::UNKNOWN;
     const uint32_t _way_steps = 125000; //TODO: make this configureable
     const uint32_t _edge_distance = 10000; //TODO: make this configureable
-    std::optional<DoorPosition> _position = std::nullopt;
     TMC2209Stepper _driver;
     uint8_t _stall_thrs;
+
+    SemaphoreHandle_t _mutex = NULL;
 
   private:
     uint32_t rotate(
