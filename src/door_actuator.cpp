@@ -86,7 +86,6 @@ void rotate_task(void* arg) {
   }
   digitalWrite(EN_PIN, HIGH);
   params->door->_state = params->target_state;
-  xSemaphoreGive(params->door->_mutex);
   free(params);
   vTaskDelete(NULL);
 }
@@ -137,7 +136,6 @@ void homing_task(void* arg) {
     }
   }
   digitalWrite(EN_PIN, HIGH);
-  xSemaphoreGive(params->door->_mutex);
   free(params);
   vTaskDelete(NULL);
 }
@@ -149,10 +147,6 @@ uint32_t DoorActuator::rotate(
     const uint32_t step_delay
     ) {
 
-  if (xSemaphoreTake(_mutex, portMAX_DELAY) == pdFALSE) {
-    Serial.println("mutex is in use");
-    return 1;
-  }
 
   this->_state = direction == DoorPosition::OPEN ? DoorState::OPENING : DoorState::CLOSING;
   _driver.shaft(direction != DoorPosition::OPEN);
@@ -174,12 +168,11 @@ uint32_t DoorActuator::rotate(
   if (xTaskCreatePinnedToCore(
       rotate_task,
       "RotateTask",
-      1000,
+      2000,
       params,
       3,
       NULL,
       1) != pdPASS) {
-    xSemaphoreGive(_mutex);
     this->_state = DoorState::UNKNOWN;
     Serial.println("could not create rotate task");
     return 1;
@@ -194,10 +187,6 @@ bool DoorActuator::home(bool force) {
     return 0;
   }
 
-  if (xSemaphoreTake(_mutex, portMAX_DELAY) == pdFALSE) {
-    Serial.println("mutex is in use");
-    return 1;
-  }
 
   params->door = this;
   params->step_delay = 70;
@@ -205,12 +194,11 @@ bool DoorActuator::home(bool force) {
   if (xTaskCreatePinnedToCore(
       homing_task,
       "HomeTask",
-      1000,
+      2000,
       params,
       3,
       NULL,
       1) != pdPASS) {
-    xSemaphoreGive(_mutex);
     this->_state = DoorState::UNKNOWN;
     Serial.println("could not create home task");
     return 1;
