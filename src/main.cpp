@@ -6,6 +6,7 @@
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
+#include "esp_timer.h"
 
 
 AsyncServer server(PORT);
@@ -65,6 +66,16 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
     client->write("state: ");
     client->write(state_name(state));
     client->write("\n");
+
+    auto uptime = esp_timer_get_time();
+    if (uptime != 0) {
+      char uptime_str[32];
+      uptime /= 1000 * 1000 * 60;
+      ltoa(uptime, uptime_str, 10);
+      client->write("uptime: ");
+      client->write(uptime_str);
+      client->write(" minutes\n");
+    }
   } else if (strncmp(payload, "reboot", len) == 0) {
     ESP.restart();
   } else {
