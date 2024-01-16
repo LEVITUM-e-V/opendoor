@@ -43,6 +43,33 @@ static const char* state_name(DoorState state) {
   }
 }
 
+enum class DoorError {
+  NOT_HOMED,
+  ALREADY_CLOSED,
+  ALREADY_OPEN,
+  IN_MOTION,
+  MALLOC_ERROR,
+  RTOS_TASK,
+};
+
+static const char* error_name(DoorError state) {
+  switch (state) {
+    case DoorError::NOT_HOMED:
+      return "the door is not homed";
+    case DoorError::ALREADY_CLOSED:
+      return "the door is already closed";
+    case DoorError::ALREADY_OPEN:
+      return "the door is already open";
+    case DoorError::IN_MOTION:
+      return "the door is currently in motion";
+    case DoorError::MALLOC_ERROR:
+      return "malloc error";
+    case DoorError::RTOS_TASK:
+      return "rtos task error";
+    default:
+      return "unknown error";
+  }
+}
 
 class DoorActuator {
 
@@ -73,11 +100,11 @@ class DoorActuator {
 
     void notify_stalled();
 
-    bool home(bool force = false);
+    std::optional<DoorError> home(bool force = false);
 
-    bool open();
+    std::optional<DoorError> open();
 
-    bool close();
+    std::optional<DoorError> close();
 
     bool _stalled = false;
     DoorState _state = DoorState::UNKNOWN;

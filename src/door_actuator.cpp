@@ -95,21 +95,13 @@ void homing_task(void* arg) {
   RotateTaskParameter* params = (RotateTaskParameter*) arg;
   digitalWrite(EN_PIN, LOW);
   params->door->_stalled = false;
-  params->door->_driver.shaft(true); // close
+  params->door->_driver.shaft(false); // open
   params->door->_driver.rms_current(400);
   params->door->_driver.TPWMTHRS(0);
   params->door->_driver.SGTHRS(params->door->_stall_thrs);
-  while (!params->door->_stalled) {
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(params->step_delay);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(params->step_delay);
-    feedTheDog();
-  }
 
   uint32_t step_counter = 0;
-  params->door->_driver.shaft(false); // close
-  params->door->_stalled = false;
+
   while (!params->door->_stalled) {
     digitalWrite(STEP_PIN, HIGH);
     delayMicroseconds(params->step_delay);
@@ -119,22 +111,17 @@ void homing_task(void* arg) {
     ++step_counter;
   }
 
-  if (step_counter < params->door->_way_steps) {
-    Serial.println("way steps not reached");
-    // we failed, either left or right is wrong
-    params->door->_state = DoorState::UNKNOWN;
-  } else {
-    Serial.println("door is homed");
-    params->door->_state = DoorState::OPEN;
-    params->door->_driver.shaft(true);
-    for (int i = 0; i < params->door->_edge_distance; ++i) {
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(40);
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(40);
-      feedTheDog();
-    }
+  Serial.println("door is homed");
+  params->door->_state = DoorState::OPEN;
+  params->door->_driver.shaft(true);
+  for (int i = 0; i < params->door->_edge_distance; ++i) {
+    digitalWrite(STEP_PIN, HIGH);
+    delayMicroseconds(40);
+    digitalWrite(STEP_PIN, LOW);
+    delayMicroseconds(40);
+    feedTheDog();
   }
+
   digitalWrite(EN_PIN, HIGH);
   free(params);
   vTaskDelete(NULL);
@@ -180,11 +167,10 @@ uint32_t DoorActuator::rotate(
   return 0;
 }
 
-bool DoorActuator::home(bool force) {
+std::optional<DoorError> DoorActuator::home(bool force) {
   RotateTaskParameter* params = (RotateTaskParameter*) malloc(sizeof(RotateTaskParameter));
   if (params == NULL) {
-    Serial.println("malloc error");
-    return 0;
+    return DoorError::MALLOC_ERROR;
   }
 
 
@@ -200,27 +186,38 @@ bool DoorActuator::home(bool force) {
       NULL,
       1) != pdPASS) {
     this->_state = DoorState::UNKNOWN;
-    Serial.println("could not create home task");
-    return 1;
+    return DoorError::RTOS_TASK;
   }
 
-  return true;
+  return {};
 }
 
-bool DoorActuator::open() {
-  if (this->_state != DoorState::CLOSED) {
-    Serial.println("door not in closed state. cannot open");
-    return false;
+std::optional<DoorError> DoorActuator::open() {
+  if (this->_state == DoorState::UNKNOWN) {
+    return DoorError::NOT_HOMED;
+  }
+  if (this->_state == DoorState::CLOSING 
+      || this->_state == DoorState::OPENING) {
+    return DoorError::IN_MOTION;
+  }
+  if (this->_state == DoorState::OPEN) {
+    return DoorError::ALREADY_OPEN;
   }
   this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::OPEN, false, 40);
-  return true;
+  return {};
 }
 
-bool DoorActuator::close() {
-  if (this->_state != DoorState::OPEN) {
-    Serial.println("door not in closed state. cannot open");
-    return false;
+std::optional<DoorError> DoorActuator::close() {
+  if (this->_state == DoorState::UNKNOWN) {
+    return DoorError::NOT_HOMED;
+  }
+  if (this->_state == DoorState::CLOSING 
+      || this->_state == DoorState::OPENING) {
+    return DoorError::IN_MOTION;
+  }
+  if (this->_state == DoorState::CLOSED) {
+    return DoorError::ALREADY_CLOSED;
   }
   this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::CLOSE, false);
-  return true;
+  return {};
 }

@@ -37,20 +37,36 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
     strncpy(pch, "\0", 1);
   
   if (strncmp(payload, "open", len) == 0) {
-    client->write("opening door\n");
-    door.open();
+    auto error = door.open();
+    if (error) {
+      client->write(error_name(error.value()));
+      client->write("\n");
+    } else {
+      client->write("opening door\n");
+    }
   } else if (strncmp(payload, "close", len) == 0) {
-    client->write("closing door\n");
-    door.close();
+    auto error = door.close();
+    if (error) {
+      client->write(error_name(error.value()));
+      client->write("\n");
+    } else {
+      client->write("closing door\n");
+    }
   } else if (strncmp(payload, "home", len) == 0) {
-    client->write("homing door\n");
-    door.home();
+    auto error = door.home();
+    if (error) {
+      client->write(error_name(error.value()));
+      client->write("\n");
+    } else {
+      client->write("homing door\n");
+    }
   } else if (strncmp(payload, "status", len) == 0) {
     DoorState state = door.get_state();
     client->write("state: ");
     client->write(state_name(state));
     client->write("\n");
-
+  } else if (strncmp(payload, "reboot", len) == 0) {
+    ESP.restart();
   } else {
     client->write("unknown command\n");
   }
