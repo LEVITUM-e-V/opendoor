@@ -50,7 +50,7 @@ void DoorActuator::notify_stalled() {
 struct RotateTaskParameter {
   bool stallguard;
   DoorActuator* door;
-  DoorState target_state;
+  DoorPosition direction;
   uint32_t steps;
   uint32_t step_delay;
 };
@@ -72,6 +72,10 @@ void rotate_task(void* arg) {
   uint32_t step_counter = 0;
   digitalWrite(EN_PIN, LOW);
   params->door->_stalled = false;
+  params->door->_driver.shaft(params->direction != DoorPosition::OPEN);
+  params->door->_driver.rms_current(400);
+  params->door->_driver.TPWMTHRS(0);
+  params->door->_driver.SGTHRS(params->door->_stall_thrs);
   while (!(params->stallguard && params->door->_stalled)) {
      if (params->steps != 0 && step_counter >= params->steps) {
        break;
@@ -85,7 +89,7 @@ void rotate_task(void* arg) {
     ++step_counter;
   }
   digitalWrite(EN_PIN, HIGH);
-  params->door->_state = params->target_state;
+  params->door->_state = params->direction == DoorPosition::OPEN ? DoorState::OPEN : DoorState::CLOSED;
   free(params);
   vTaskDelete(NULL);
 }
@@ -136,10 +140,6 @@ uint32_t DoorActuator::rotate(
 
 
   this->_state = direction == DoorPosition::OPEN ? DoorState::OPENING : DoorState::CLOSING;
-  _driver.shaft(direction != DoorPosition::OPEN);
-  _driver.rms_current(400);
-  _driver.TPWMTHRS(0);
-  _driver.SGTHRS(_stall_thrs);
   RotateTaskParameter* params = (RotateTaskParameter*) malloc(sizeof(RotateTaskParameter));
   if (params == NULL) {
     Serial.println("malloc error");
@@ -150,7 +150,7 @@ uint32_t DoorActuator::rotate(
   params->door = this;
   params->steps = steps.value_or(0);
   params->step_delay = step_delay;
-  params->target_state = direction == DoorPosition::OPEN ? DoorState::OPEN : DoorState::CLOSED;
+  params->direction = direction;
 
   if (xTaskCreatePinnedToCore(
       rotate_task,
