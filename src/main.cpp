@@ -115,9 +115,17 @@ void setup() {
   server.begin();
 }
 
+const unsigned long WIFI_RECONNECT_INTERVAL = 30000;
+unsigned long wifi_reset_millis = 0;
+
 void loop() {
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+
+  unsigned long current_millis = millis();
+  if ((WiFi.status() != WL_CONNECTED) && 
+      (current_millis - wifi_reset_millis >= WIFI_RECONNECT_INTERVAL)) {
+    Serial.println("Reconnecting to WiFi...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    wifi_reset_millis = current_millis;
   }
 }
