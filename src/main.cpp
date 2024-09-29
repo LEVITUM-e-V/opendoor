@@ -76,6 +76,73 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
       client->write(uptime_str);
       client->write(" minutes\n");
     }
+
+    client->write("driver version: ");
+    char versionStr[10];
+    itoa(door._driver.version(), versionStr, 10);
+    client->write(versionStr);
+    client->write("\n");
+
+    size_t freeHeap = esp_get_free_heap_size();
+    char freeHeapStr[32];
+    ltoa(freeHeap, freeHeapStr, 10);
+    client->write("free heap: ");
+    client->write(freeHeapStr);
+    client->write(" bytes\n");
+
+    size_t freeRam = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    char freeRamStr[32];
+    ltoa(freeRam, freeRamStr, 10);
+    client->write("free RAM: ");
+    client->write(freeRamStr);
+    client->write(" bytes\n");
+
+    wl_status_t wifiStatus = WiFi.status();
+
+    if (wifiStatus == WL_CONNECTED) {
+      client->write("SSID: ");
+      client->write(WiFi.SSID().c_str());
+      client->write("\n");
+
+      client->write("IP address: ");
+      client->write(WiFi.localIP().toString().c_str());
+      client->write("\n");
+
+      client->write("Subnet Mask: ");
+      client->write(WiFi.subnetMask().toString().c_str());
+      client->write("\n");
+
+      client->write("Gateway IP: ");
+      client->write(WiFi.gatewayIP().toString().c_str());
+      client->write("\n");
+
+      client->write("DNS IP: ");
+      client->write(WiFi.dnsIP().toString().c_str());
+      client->write("\n");
+
+      client->write("BSSID: ");
+      client->write(WiFi.BSSIDstr().c_str());
+      client->write("\n");
+
+      client->write("MAC Address: ");
+      client->write(WiFi.macAddress().c_str());
+      client->write("\n");
+
+      int32_t rssi = WiFi.RSSI();
+      char rssiStr[32];
+      ltoa(rssi, rssiStr, 10);
+      client->write("RSSI: ");
+      client->write(rssiStr);
+      client->write(" dBm\n");
+
+      int32_t channel = WiFi.channel();
+      char channelStr[32];
+      ltoa(channel, channelStr, 10);
+      client->write("Channel: ");
+      client->write(channelStr);
+      client->write("\n");
+    }
+
   } else if (strncmp(payload, "reboot", len) == 0) {
     ESP.restart();
   } else {
