@@ -151,16 +151,11 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
   client->send();
 }
 
-void handleDisconnect(void* arg, AsyncClient* client) {
-  delete client;
-}
-
 void handleClient(void *arg, AsyncClient* client) {
   Serial.println("got client");
   client->write("hey you. I'm a door\n");
   client->send();
   client->onData(handleData);
-  client->onDisconnect(handleDisconnect);
 }
 
 void setup() {
