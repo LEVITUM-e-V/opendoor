@@ -24,7 +24,7 @@ bool DoorActuator::setup() {
   _driver.internal_Rsense(false); 
   _driver.mstep_reg_select(true);
   _driver.rms_current(400);
-  _driver.microsteps(64);
+  _driver.microsteps(16);
 
   // driver.en_pwm_mode(true); // Toggle stealthChop on TMC2130/2160/5130/5160
   _driver.en_spreadCycle(false);
@@ -71,11 +71,13 @@ void rotate_task(void* arg) {
   RotateTaskParameter* params = (RotateTaskParameter*) arg;
   uint32_t step_counter = 0;
   digitalWrite(EN_PIN, LOW);
+  delay(200);
   params->door->_stalled = false;
   params->door->_driver.shaft(params->direction != DoorPosition::OPEN);
   params->door->_driver.rms_current(400);
   params->door->_driver.TPWMTHRS(0);
   params->door->_driver.SGTHRS(params->door->_stall_thrs);
+  delay(200);
   while (!(params->stallguard && params->door->_stalled)) {
      if (params->steps != 0 && step_counter >= params->steps) {
        break;
@@ -98,6 +100,7 @@ void homing_task(void* arg) {
 
   RotateTaskParameter* params = (RotateTaskParameter*) arg;
   digitalWrite(EN_PIN, LOW);
+  delay(200);
   params->door->_stalled = false;
   params->door->_driver.shaft(false); // open
   params->door->_driver.rms_current(400);
@@ -105,6 +108,7 @@ void homing_task(void* arg) {
   params->door->_driver.SGTHRS(params->door->_stall_thrs);
 
   uint32_t step_counter = 0;
+  delay(200);
 
   while (!params->door->_stalled) {
     digitalWrite(STEP_PIN, HIGH);
@@ -175,7 +179,7 @@ std::optional<DoorError> DoorActuator::home(bool force) {
 
 
   params->door = this;
-  params->step_delay = 70;
+  params->step_delay = 300;
 
   if (xTaskCreatePinnedToCore(
       homing_task,
@@ -203,7 +207,7 @@ std::optional<DoorError> DoorActuator::open() {
   if (this->_state == DoorState::OPEN) {
     return DoorError::ALREADY_OPEN;
   }
-  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::OPEN, false, 40);
+  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::OPEN, false, 120);
   return {};
 }
 
