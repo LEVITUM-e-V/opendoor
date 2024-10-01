@@ -164,6 +164,7 @@ uint32_t DoorActuator::rotate(
       3,
       NULL,
       1) != pdPASS) {
+    free(params);
     this->_state = DoorState::UNKNOWN;
     Serial.println("could not create rotate task");
     return 1;
@@ -189,6 +190,7 @@ std::optional<DoorError> DoorActuator::home(bool force) {
       3,
       NULL,
       1) != pdPASS) {
+    free(params);
     this->_state = DoorState::UNKNOWN;
     return DoorError::RTOS_TASK;
   }
