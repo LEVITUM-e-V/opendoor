@@ -11,7 +11,7 @@
 
 AsyncServer server(PORT);
 WiFiClient wifi;
-DoorActuator door(&Serial2, 10);
+DoorActuator door(&Serial2, 20);
 
 #pragma GCC diagnostic ignored "-Wunused-function"
 static void IRAM_ATTR stall_guard() {

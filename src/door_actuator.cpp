@@ -9,51 +9,59 @@
 #include "freertos/projdefs.h"
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
+#include "freertos/queue.h"
 
-bool DoorActuator::setup() {
-  pinMode(EN_PIN, OUTPUT);
-  pinMode(STEP_PIN, OUTPUT);
+#define QUEUE_LENGTH 10
+#define QUEUE_ITEM_SIZE sizeof(MotionCommand)
 
-  digitalWrite(EN_PIN, HIGH); // disable driver for now
+struct MotionCommand {
+  bool homing_before_cmd;
+  DoorActuator* door;
+  DoorDirection direction;
+  uint32_t steps;
+  uint32_t step_delay;
+};
 
-
-  _driver.begin();
-  _driver.toff(4);
-  _driver.blank_time(24);
-  _driver.I_scale_analog(false);
-  _driver.internal_Rsense(false); 
-  _driver.mstep_reg_select(true);
-  _driver.rms_current(400);
-  _driver.microsteps(16);
-
-  // driver.en_pwm_mode(true); // Toggle stealthChop on TMC2130/2160/5130/5160
-  _driver.en_spreadCycle(false);
-  _driver.pwm_autoscale(true);
-  _driver.pdn_disable(false);
-  _driver.semin(0);
-  _driver.semax(2);
-  _driver.sedn(0b01);
-  _driver.shaft(false);
-  _driver.TCOOLTHRS(0xFFFFF);
-  _driver.TPWMTHRS(0);
-  _driver.SGTHRS(_stall_thrs);
-
-  Serial.print("driver version: ");
-  Serial.println(_driver.version());
-  return true;
-}
 
 void DoorActuator::notify_stalled() {
   _stalled = true;
 }
 
-struct RotateTaskParameter {
-  bool stallguard;
-  DoorActuator* door;
-  DoorPosition direction;
-  uint32_t steps;
-  uint32_t step_delay;
-};
+const char* state_name(DoorState state) {
+  switch (state) {
+    case DoorState::UNKNOWN:
+      return "unknown/failed";
+    case DoorState::HOMING:
+      return "homing";
+    case DoorState::OPEN:
+      return "open";
+    case DoorState::CLOSING:
+      return "closing";
+    case DoorState::CLOSED:
+      return "closed";
+    case DoorState::OPENING:
+      return "opening";
+    default:
+      return "unknown state";
+  }
+}
+
+const char* error_name(DoorError state) {
+  switch (state) {
+    case DoorError::NOT_HOMED:
+      return "the door is not homed";
+    case DoorError::ALREADY_CLOSED:
+      return "the door is already closed";
+    case DoorError::ALREADY_OPEN:
+      return "the door is already open";
+    case DoorError::IN_MOTION:
+      return "the door is currently in motion";
+    case DoorError::QUEUE_FULL:
+      return "queue full";
+    default:
+      return "unknown error";
+  }
+}
 
 void feedTheDog(){
   // feed dog 0
@@ -68,133 +76,163 @@ void feedTheDog(){
 
 void rotate_task(void* arg) {
 
-  RotateTaskParameter* params = (RotateTaskParameter*) arg;
-  uint32_t step_counter = 0;
-  digitalWrite(EN_PIN, LOW);
-  delay(200);
-  params->door->_stalled = false;
-  params->door->_driver.shaft(params->direction != DoorPosition::OPEN);
-  params->door->_driver.rms_current(400);
-  params->door->_driver.TPWMTHRS(0);
-  params->door->_driver.SGTHRS(params->door->_stall_thrs);
-  delay(200);
-  while (!(params->stallguard && params->door->_stalled)) {
-     if (params->steps != 0 && step_counter >= params->steps) {
-       break;
-     }
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(params->step_delay);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(params->step_delay);
-    feedTheDog();
+  DoorActuator* actuator = (DoorActuator*) arg;
+  MotionCommand cmd;
 
-    ++step_counter;
+  while (true) {
+    if (xQueueReceive(
+          actuator->_commandQueue,
+          &cmd,
+          portMAX_DELAY
+          )) {
+      uint32_t step_counter = 0;
+      actuator->_stalled = false;
+
+      if (cmd.homing_before_cmd) {
+          actuator->set_registers(false, true);
+          digitalWrite(EN_PIN, LOW);
+          delay(DRIVER_CMD_DELAY_MS);
+          //while (!actuator->_stalled && step_counter < MAX_HOMING_STEPS) {
+          while (!actuator->_stalled && step_counter < 1000) {
+            digitalWrite(STEP_PIN, HIGH);
+            delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
+            digitalWrite(STEP_PIN, LOW);
+            delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
+            feedTheDog();
+            ++step_counter;
+          }
+          digitalWrite(EN_PIN, HIGH);
+          step_counter = 0;
+          if (actuator->_stalled) {
+            Serial.println("stall detected");
+            actuator->set_registers(true, false);
+            digitalWrite(EN_PIN, LOW);
+            //for (int i = 0; i < HOMING_EDGE_DISTANCE_STEPS; ++i) {
+            for (int i = 0; i < 0; ++i) {
+              digitalWrite(STEP_PIN, HIGH);
+              delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
+              digitalWrite(STEP_PIN, LOW);
+              delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
+              feedTheDog();
+            }
+            digitalWrite(EN_PIN, HIGH);
+            actuator->_position = HOMING_EDGE_DISTANCE_STEPS;
+            actuator->_state = DoorState::OPEN;
+            Serial.println("door is homed");
+          } else {
+            actuator->_state = DoorState::UNKNOWN;
+            Serial.println("Homing failed: no stall detected");
+          }
+      }
+
+      actuator->set_registers(cmd.direction != DoorDirection::OPEN, false);
+      digitalWrite(EN_PIN, LOW);
+      while (step_counter < cmd.steps) {
+          digitalWrite(STEP_PIN, HIGH);
+          delayMicroseconds(cmd.step_delay);
+          digitalWrite(STEP_PIN, LOW);
+          delayMicroseconds(cmd.step_delay);
+          feedTheDog();
+          ++step_counter;
+      }
+      digitalWrite(EN_PIN, HIGH);
+
+      if (cmd.steps > 0) {
+        if (cmd.direction == DoorDirection::OPEN) {
+          actuator->_state = DoorState::OPEN;
+          actuator->_position -= step_counter;
+        } else if (cmd.direction == DoorDirection::CLOSE) {
+          actuator->_state = DoorState::CLOSED;
+          actuator->_position += step_counter;
+        }
+      }
+    }
   }
-  digitalWrite(EN_PIN, HIGH);
-  params->door->_state = params->direction == DoorPosition::OPEN ? DoorState::OPEN : DoorState::CLOSED;
-  free(params);
-  vTaskDelete(NULL);
 }
 
-void homing_task(void* arg) {
+void DoorActuator::set_registers(bool shaft, bool stallguard) {
+  _driver.toff(4);
+  _driver.blank_time(24);
+  _driver.I_scale_analog(false);
+  _driver.internal_Rsense(false); 
+  _driver.mstep_reg_select(true);
+  _driver.rms_current(400);
+  _driver.microsteps(MICROSTEPS);
 
-  RotateTaskParameter* params = (RotateTaskParameter*) arg;
-  digitalWrite(EN_PIN, LOW);
-  delay(200);
-  params->door->_stalled = false;
-  params->door->_driver.shaft(false); // open
-  params->door->_driver.rms_current(400);
-  params->door->_driver.TPWMTHRS(0);
-  params->door->_driver.SGTHRS(params->door->_stall_thrs);
-
-  uint32_t step_counter = 0;
-  delay(200);
-
-  while (!params->door->_stalled) {
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(params->step_delay);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(params->step_delay);
-    feedTheDog();
-    ++step_counter;
-  }
-
-  Serial.println("door is homed");
-  params->door->_state = DoorState::OPEN;
-  params->door->_driver.shaft(true);
-  for (int i = 0; i < params->door->_edge_distance; ++i) {
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(40);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(40);
-    feedTheDog();
-  }
-
-  digitalWrite(EN_PIN, HIGH);
-  free(params);
-  vTaskDelete(NULL);
+  // driver.en_pwm_mode(true); // Toggle stealthChop on TMC2130/2160/5130/5160
+  _driver.en_spreadCycle(false);
+  _driver.pwm_autoscale(true);
+  _driver.pdn_disable(false);
+  _driver.semin(0);
+  _driver.semax(2);
+  _driver.sedn(0b01);
+  _driver.shaft(false);
+  _driver.TCOOLTHRS(0xFFFFF);
+  _driver.TPWMTHRS(0);
+  _driver.SGTHRS(stallguard ? _stall_thrs : 0);
+  delay(DRIVER_CMD_DELAY_MS);
 }
 
-uint32_t DoorActuator::rotate(
+bool DoorActuator::setup() {
+  pinMode(EN_PIN, OUTPUT);
+  pinMode(STEP_PIN, OUTPUT);
+
+  digitalWrite(EN_PIN, HIGH);
+
+
+  _driver.begin();
+  this->set_registers(false);
+
+  Serial.print("driver version: ");
+  Serial.println(_driver.version());
+
+  _commandQueue = xQueueCreate(QUEUE_LENGTH, QUEUE_ITEM_SIZE);
+
+  if (xTaskCreatePinnedToCore(
+      rotate_task, "RotateTask", 4096, this, 3, NULL, 1) != pdPASS) {
+    Serial.println("Could not create rotate task");
+    return false;
+  }
+
+  return true;
+}
+
+std::optional<DoorError>  DoorActuator::rotate(
     std::optional<const uint32_t> steps,
-    const DoorPosition direction,
-    const bool stallguard,
+    const DoorDirection direction,
     const uint32_t step_delay
     ) {
 
 
-  this->_state = direction == DoorPosition::OPEN ? DoorState::OPENING : DoorState::CLOSING;
-  RotateTaskParameter* params = (RotateTaskParameter*) malloc(sizeof(RotateTaskParameter));
-  if (params == NULL) {
-    Serial.println("malloc error");
-    return 0;
-  }
+  this->_state = direction == DoorDirection::OPEN ? DoorState::OPENING : DoorState::CLOSING;
 
-  params->stallguard = stallguard;
-  params->door = this;
-  params->steps = steps.value_or(0);
-  params->step_delay = step_delay;
-  params->direction = direction;
+   MotionCommand command = {
+      .homing_before_cmd = false,
+      .door = this,
+      .direction = direction,
+      .steps = steps.value_or(0),
+      .step_delay = step_delay,
+  };
 
-  if (xTaskCreatePinnedToCore(
-      rotate_task,
-      "RotateTask",
-      2000,
-      params,
-      3,
-      NULL,
-      1) != pdPASS) {
-    free(params);
-    this->_state = DoorState::UNKNOWN;
-    Serial.println("could not create rotate task");
-    return 1;
+  if (xQueueSendToBack(_commandQueue, &command, pdMS_TO_TICKS(100)) != pdPASS) {
+    Serial.println("Queue full, command not sent");
+    return DoorError::QUEUE_FULL;
   }
-  return 0;
+  return {};
 }
 
-std::optional<DoorError> DoorActuator::home(bool force) {
-  RotateTaskParameter* params = (RotateTaskParameter*) malloc(sizeof(RotateTaskParameter));
-  if (params == NULL) {
-    return DoorError::MALLOC_ERROR;
+std::optional<DoorError> DoorActuator::home() {
+  MotionCommand command = {
+      .homing_before_cmd = true,
+      .door = this,
+      .direction = DoorDirection::OPEN,
+      .steps = 0,
+      .step_delay = 300,
+  };
+
+  if (xQueueSendToBack(_commandQueue, &command, pdMS_TO_TICKS(100)) != pdPASS) {
+    return DoorError::QUEUE_FULL;
   }
-
-
-  params->door = this;
-  params->step_delay = 300;
-
-  if (xTaskCreatePinnedToCore(
-      homing_task,
-      "HomeTask",
-      2000,
-      params,
-      3,
-      NULL,
-      1) != pdPASS) {
-    free(params);
-    this->_state = DoorState::UNKNOWN;
-    return DoorError::RTOS_TASK;
-  }
-
   return {};
 }
 
@@ -209,7 +247,7 @@ std::optional<DoorError> DoorActuator::open() {
   if (this->_state == DoorState::OPEN) {
     return DoorError::ALREADY_OPEN;
   }
-  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::OPEN, false, 120);
+  this->rotate(std::optional(STEPS_DISTANCE_OPEN_CLOSED), DoorDirection::OPEN, 120);
   return {};
 }
 
@@ -224,6 +262,6 @@ std::optional<DoorError> DoorActuator::close() {
   if (this->_state == DoorState::CLOSED) {
     return DoorError::ALREADY_CLOSED;
   }
-  this->rotate(std::optional(this->_way_steps - _edge_distance), DoorPosition::CLOSE, false);
+  this->rotate(std::optional(STEPS_DISTANCE_OPEN_CLOSED), DoorDirection::CLOSE);
   return {};
 }
