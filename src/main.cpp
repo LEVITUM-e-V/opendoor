@@ -3,11 +3,13 @@
 #include <AsyncTCP.h>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
 #include "esp_timer.h"
 
+const size_t INITIAL_BUFFER_SIZE = 256;
 
 AsyncServer server(PORT);
 WiFiClient wifi;
@@ -18,149 +20,136 @@ static void IRAM_ATTR stall_guard() {
   door.notify_stalled();
 }
 
-void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
-  Serial.print("received ");
-  Serial.print(len);
-  Serial.println(" bytes");
-
-  if (len < 1) {
-    return;
-  }
-
-  char* payload = reinterpret_cast<char*>(data);
-
-  if (payload[len-1] != '\0') {
-    payload[len-1] = '\0';
-  }
-  //remove newline
-  char *pch = strstr(payload, "\n");
-  if(pch != NULL)
-    strncpy(pch, "\0", 1);
-  
-  if (strncmp(payload, "open", len) == 0) {
+void processMessage(AsyncClient* client, const String& message) {
+  if (message.equals("open")) {
     auto error = door.open();
     if (error) {
-      client->write(error_name(error.value()));
-      client->write("\n");
+      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str()); // Send error if any
     } else {
-      client->write("opening door\n");
+      client->write("Opening door...\n");
     }
-  } else if (strncmp(payload, "close", len) == 0) {
+  } 
+  else if (message.equals("close")) {
     auto error = door.close();
     if (error) {
-      client->write(error_name(error.value()));
-      client->write("\n");
+      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str());
     } else {
-      client->write("closing door\n");
+      client->write("Closing door...\n");
     }
-  } else if (strncmp(payload, "home", len) == 0) {
+  } 
+  else if (message.equals("home")) {
     auto error = door.home();
     if (error) {
-      client->write(error_name(error.value()));
-      client->write("\n");
+      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str());
     } else {
-      client->write("homing door\n");
+      client->write("Homing door...\n");
     }
-  } else if (strncmp(payload, "status", len) == 0) {
+  } 
+  else if (message.equals("status")) {
     DoorState state = door.get_state();
-    client->write("state: ");
-    client->write(state_name(state));
-    client->write("\n");
+    String response = "State: " + String(state_name(state)) + "\n";
 
-    auto uptime = esp_timer_get_time();
+    auto uptime = esp_timer_get_time(); // Get uptime in microseconds
     if (uptime != 0) {
-      char uptime_str[32];
-      uptime /= 1000 * 1000 * 60;
-      ltoa(uptime, uptime_str, 10);
-      client->write("uptime: ");
-      client->write(uptime_str);
-      client->write(" minutes\n");
+      uptime /= 1000 * 1000 * 60; // Convert to minutes
+      response += "Uptime: " + String(uptime) + " minutes\n";
     }
-
-    client->write("driver version: ");
-    char versionStr[10];
-    itoa(door._driver.version(), versionStr, 10);
-    client->write(versionStr);
-    client->write("\n");
 
     size_t freeHeap = esp_get_free_heap_size();
-    char freeHeapStr[32];
-    ltoa(freeHeap, freeHeapStr, 10);
-    client->write("free heap: ");
-    client->write(freeHeapStr);
-    client->write(" bytes\n");
+    response += "Free heap: " + String(freeHeap) + " bytes\n";
 
     size_t freeRam = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    char freeRamStr[32];
-    ltoa(freeRam, freeRamStr, 10);
-    client->write("free RAM: ");
-    client->write(freeRamStr);
-    client->write(" bytes\n");
+    response += "Free RAM: " + String(freeRam) + " bytes\n";
 
     wl_status_t wifiStatus = WiFi.status();
-
     if (wifiStatus == WL_CONNECTED) {
-      client->write("SSID: ");
-      client->write(WiFi.SSID().c_str());
-      client->write("\n");
-
-      client->write("IP address: ");
-      client->write(WiFi.localIP().toString().c_str());
-      client->write("\n");
-
-      client->write("Subnet Mask: ");
-      client->write(WiFi.subnetMask().toString().c_str());
-      client->write("\n");
-
-      client->write("Gateway IP: ");
-      client->write(WiFi.gatewayIP().toString().c_str());
-      client->write("\n");
-
-      client->write("DNS IP: ");
-      client->write(WiFi.dnsIP().toString().c_str());
-      client->write("\n");
-
-      client->write("BSSID: ");
-      client->write(WiFi.BSSIDstr().c_str());
-      client->write("\n");
-
-      client->write("MAC Address: ");
-      client->write(WiFi.macAddress().c_str());
-      client->write("\n");
+      response += "SSID: " + String(WiFi.SSID()) + "\n";
+      response += "IP address: " + WiFi.localIP().toString() + "\n";
+      response += "Subnet Mask: " + WiFi.subnetMask().toString() + "\n";
+      response += "Gateway IP: " + WiFi.gatewayIP().toString() + "\n";
+      response += "DNS IP: " + WiFi.dnsIP().toString() + "\n";
+      response += "BSSID: " + String(WiFi.BSSIDstr()) + "\n";
+      response += "MAC Address: " + String(WiFi.macAddress()) + "\n";
 
       int32_t rssi = WiFi.RSSI();
-      char rssiStr[32];
-      ltoa(rssi, rssiStr, 10);
-      client->write("RSSI: ");
-      client->write(rssiStr);
-      client->write(" dBm\n");
+      response += "RSSI: " + String(rssi) + " dBm\n";
 
       int32_t channel = WiFi.channel();
-      char channelStr[32];
-      ltoa(channel, channelStr, 10);
-      client->write("Channel: ");
-      client->write(channelStr);
-      client->write("\n");
+      response += "Channel: " + String(channel) + "\n";
     }
 
-  } else if (strncmp(payload, "reboot", len) == 0) {
-    ESP.restart();
-  } else {
-    client->write("unknown command\n");
+    client->write(response.c_str()); // Send the constructed response
+  } 
+  else if (message.equals("reboot")) {
+    client->write("Rebooting...\n");
+    ESP.restart(); // Restart the ESP device
+  } 
+  else {
+    client->write("Unknown command\n"); // Handle unknown commands
   }
-  client->send();
+}
+
+
+struct ClientData {
+  size_t bufLen = 0;
+  size_t bufSize = INITIAL_BUFFER_SIZE;
+  char* buffer = nullptr;
+};
+
+void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
+  ClientData* client_data = static_cast<ClientData*>(arg);
+
+  if (client_data->bufLen + len >= client_data->bufSize) {
+    client_data->bufSize = client_data->bufLen + len + 1;
+    client_data->buffer = static_cast<char*>(realloc(client_data->buffer, client_data->bufSize));
+    if (client_data->buffer == nullptr) {
+      Serial.println("Failed to allocate memory for buffer!");
+      client->close();
+      return;
+    }
+    arg = client_data;
+  }
+
+  memcpy(client_data->buffer + client_data->bufLen, data, len);
+  client_data->bufLen += len;
+
+  char* messageEnd;
+  while ((messageEnd = strchr(client_data->buffer, '\n')) != nullptr) {
+    *messageEnd = '\0';
+    processMessage(client, String(client_data->buffer));
+    size_t remainingLen = client_data->bufLen - (messageEnd - client_data->buffer + 1);
+    memmove(client_data->buffer, messageEnd + 1, remainingLen);
+    client_data->bufLen = remainingLen;
+  }
+  client->onData(handleData, arg);
 }
 
 void handleDisconnect(void* arg, AsyncClient* client) {
+  ClientData* client_data = static_cast<ClientData*>(arg);
+  free(client_data->buffer);
+  free(client_data);
   delete client;
 }
 
 void handleClient(void *arg, AsyncClient* client) {
   Serial.println("got client");
+  ClientData* client_data = static_cast<ClientData*>(malloc(sizeof(ClientData)));
+  if (client_data == nullptr) {
+    Serial.println("Failed to allocate memory for ClientData!");
+    client->close();
+    return;
+  }
+  client_data->buffer = static_cast<char*>(malloc(INITIAL_BUFFER_SIZE));
+  if (client_data->buffer == nullptr) {
+    Serial.println("Failed to allocate memory for buffer!");
+    free(client_data);
+    client->close();
+    return;
+  }
   client->write("hey you. I'm a door\n");
   client->send();
-  client->onData(handleData);
-  client->onDisconnect(handleDisconnect);
+  client->onData(handleData, client_data);
+  client->onDisconnect(handleDisconnect, client_data);
 }
 
 void setup() {
