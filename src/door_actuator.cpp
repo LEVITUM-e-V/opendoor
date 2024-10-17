@@ -89,11 +89,11 @@ void rotate_task(void* arg) {
       actuator->_stalled = false;
 
       if (cmd.homing_before_cmd) {
-          actuator->set_registers(false, true);
+          actuator->_driver.shaft(false);
+          delay(DRIVER_CMD_DELAY_MS);
           digitalWrite(EN_PIN, LOW);
           delay(DRIVER_CMD_DELAY_MS);
-          //while (!actuator->_stalled && step_counter < MAX_HOMING_STEPS) {
-          while (!actuator->_stalled && step_counter < 1000) {
+          while (!actuator->_stalled && step_counter < MAX_HOMING_STEPS) {
             digitalWrite(STEP_PIN, HIGH);
             delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
             digitalWrite(STEP_PIN, LOW);
@@ -105,10 +105,11 @@ void rotate_task(void* arg) {
           step_counter = 0;
           if (actuator->_stalled) {
             Serial.println("stall detected");
-            actuator->set_registers(true, false);
+            actuator->_driver.shaft(true);
+            delay(DRIVER_CMD_DELAY_MS);
             digitalWrite(EN_PIN, LOW);
-            //for (int i = 0; i < HOMING_EDGE_DISTANCE_STEPS; ++i) {
-            for (int i = 0; i < 0; ++i) {
+            delay(DRIVER_CMD_DELAY_MS);
+            for (int i = 0; i < HOMING_EDGE_DISTANCE_STEPS; ++i) {
               digitalWrite(STEP_PIN, HIGH);
               delayMicroseconds(HOMING_STEP_DELAY_MICROSECONDS);
               digitalWrite(STEP_PIN, LOW);
@@ -125,8 +126,10 @@ void rotate_task(void* arg) {
           }
       }
 
-      actuator->set_registers(cmd.direction != DoorDirection::OPEN, false);
+      actuator->_driver.shaft(cmd.direction != DoorDirection::OPEN);
+      delay(DRIVER_CMD_DELAY_MS);
       digitalWrite(EN_PIN, LOW);
+      delay(DRIVER_CMD_DELAY_MS);
       while (step_counter < cmd.steps) {
           digitalWrite(STEP_PIN, HIGH);
           delayMicroseconds(cmd.step_delay);
@@ -150,7 +153,14 @@ void rotate_task(void* arg) {
   }
 }
 
-void DoorActuator::set_registers(bool shaft, bool stallguard) {
+bool DoorActuator::setup() {
+  pinMode(EN_PIN, OUTPUT);
+  pinMode(STEP_PIN, OUTPUT);
+
+  digitalWrite(EN_PIN, HIGH);
+
+
+  _driver.begin();
   _driver.toff(4);
   _driver.blank_time(24);
   _driver.I_scale_analog(false);
@@ -169,19 +179,7 @@ void DoorActuator::set_registers(bool shaft, bool stallguard) {
   _driver.shaft(false);
   _driver.TCOOLTHRS(0xFFFFF);
   _driver.TPWMTHRS(0);
-  _driver.SGTHRS(stallguard ? _stall_thrs : 0);
-  delay(DRIVER_CMD_DELAY_MS);
-}
-
-bool DoorActuator::setup() {
-  pinMode(EN_PIN, OUTPUT);
-  pinMode(STEP_PIN, OUTPUT);
-
-  digitalWrite(EN_PIN, HIGH);
-
-
-  _driver.begin();
-  this->set_registers(false);
+  _driver.SGTHRS(_stall_thrs);
 
   Serial.print("driver version: ");
   Serial.println(_driver.version());

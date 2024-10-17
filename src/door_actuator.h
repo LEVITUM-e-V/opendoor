@@ -58,7 +58,6 @@ class DoorActuator {
 
     bool setup();
     void notify_stalled();
-    void set_registers(bool shaft, bool stallguard=false);
     std::optional<DoorError> home();
     std::optional<DoorError> open();
     std::optional<DoorError> close();

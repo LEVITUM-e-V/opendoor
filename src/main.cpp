@@ -100,14 +100,10 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
   ClientData* client_data = static_cast<ClientData*>(arg);
 
   if (client_data->bufLen + len >= client_data->bufSize) {
-    client_data->bufSize = client_data->bufLen + len + 1;
-    client_data->buffer = static_cast<char*>(realloc(client_data->buffer, client_data->bufSize));
-    if (client_data->buffer == nullptr) {
-      Serial.println("Failed to allocate memory for buffer!");
-      client->close();
-      return;
-    }
-    arg = client_data;
+    Serial.println("message too big for buffer!");
+    client->write("message too long\n");
+    client->close();
+    return;
   }
 
   memcpy(client_data->buffer + client_data->bufLen, data, len);
@@ -116,12 +112,15 @@ void handleData(void* arg, AsyncClient* client, void* data, size_t len) {
   char* messageEnd;
   while ((messageEnd = strchr(client_data->buffer, '\n')) != nullptr) {
     *messageEnd = '\0';
+    Serial.print("processing message: ");
+    Serial.println(client_data->buffer);
     processMessage(client, String(client_data->buffer));
     size_t remainingLen = client_data->bufLen - (messageEnd - client_data->buffer + 1);
     memmove(client_data->buffer, messageEnd + 1, remainingLen);
     client_data->bufLen = remainingLen;
+    Serial.print("remaining buffer length: ");
+    Serial.println(remainingLen);
   }
-  client->onData(handleData, arg);
 }
 
 void handleDisconnect(void* arg, AsyncClient* client) {
@@ -129,6 +128,7 @@ void handleDisconnect(void* arg, AsyncClient* client) {
   free(client_data->buffer);
   free(client_data);
   delete client;
+  Serial.println("client disconnected");
 }
 
 void handleClient(void *arg, AsyncClient* client) {
@@ -139,6 +139,8 @@ void handleClient(void *arg, AsyncClient* client) {
     client->close();
     return;
   }
+  client_data->bufLen = 0;
+  client_data->bufSize = INITIAL_BUFFER_SIZE;
   client_data->buffer = static_cast<char*>(malloc(INITIAL_BUFFER_SIZE));
   if (client_data->buffer == nullptr) {
     Serial.println("Failed to allocate memory for buffer!");
@@ -146,6 +148,7 @@ void handleClient(void *arg, AsyncClient* client) {
     client->close();
     return;
   }
+  Serial.println("sending HELO");
   client->write("hey you. I'm a door\n");
   client->send();
   client->onData(handleData, client_data);
