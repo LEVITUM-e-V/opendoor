@@ -26,49 +26,49 @@ void processMessage(AsyncClient* client, const String& message) {
   if (message.equals("open")) {
     auto error = door.open();
     if (error) {
-      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str()); // Send error if any
+      client->write(("error: " + String(error_name(error.value())) + "\n").c_str()); // Send error if any
     } else {
-      client->write("Opening door...\n");
+      client->write("opening door...\n");
     }
   } 
   else if (message.equals("close")) {
     auto error = door.close();
     if (error) {
-      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str());
+      client->write(("error: " + String(error_name(error.value())) + "\n").c_str());
     } else {
-      client->write("Closing door...\n");
+      client->write("closing door...\n");
     }
   } 
   else if (message.equals("home")) {
     auto error = door.home();
     if (error) {
-      client->write(("Error: " + String(error_name(error.value())) + "\n").c_str());
+      client->write(("error: " + String(error_name(error.value())) + "\n").c_str());
     } else {
-      client->write("Homing door...\n");
+      client->write("homing door...\n");
     }
   } 
   else if (message.equals("status")) {
     DoorState state = door.get_state();
-    String response = "State: " + String(state_name(state)) + "\n";
+    String response = "state: " + String(state_name(state)) + "\n";
 
     auto uptime = esp_timer_get_time(); // Get uptime in microseconds
     if (uptime != 0) {
       uptime /= 1000 * 1000 * 60; // Convert to minutes
-      response += "Uptime: " + String(uptime) + " minutes\n";
+      response += "uptime: " + String(uptime) + " minutes\n";
     }
 
     size_t freeHeap = esp_get_free_heap_size();
-    response += "Free heap: " + String(freeHeap) + " bytes\n";
+    response += "free heap: " + String(freeHeap) + " bytes\n";
 
     size_t freeRam = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    response += "Free RAM: " + String(freeRam) + " bytes\n";
+    response += "free RAM: " + String(freeRam) + " bytes\n";
 
     wl_status_t wifiStatus = WiFi.status();
     if (wifiStatus == WL_CONNECTED) {
       response += "SSID: " + String(WiFi.SSID()) + "\n";
       response += "IP address: " + WiFi.localIP().toString() + "\n";
-      response += "Subnet Mask: " + WiFi.subnetMask().toString() + "\n";
-      response += "Gateway IP: " + WiFi.gatewayIP().toString() + "\n";
+      response += "subnet Mask: " + WiFi.subnetMask().toString() + "\n";
+      response += "gateway IP: " + WiFi.gatewayIP().toString() + "\n";
       response += "DNS IP: " + WiFi.dnsIP().toString() + "\n";
       response += "BSSID: " + String(WiFi.BSSIDstr()) + "\n";
       response += "MAC Address: " + String(WiFi.macAddress()) + "\n";
@@ -77,17 +77,17 @@ void processMessage(AsyncClient* client, const String& message) {
       response += "RSSI: " + String(rssi) + " dBm\n";
 
       int32_t channel = WiFi.channel();
-      response += "Channel: " + String(channel) + "\n";
+      response += "channel: " + String(channel) + "\n";
     }
 
     client->write(response.c_str()); // Send the constructed response
   } 
   else if (message.equals("reboot")) {
-    client->write("Rebooting...\n");
+    client->write("rebooting...\n");
     ESP.restart(); // Restart the ESP device
   } 
   else {
-    client->write("Unknown command\n"); // Handle unknown commands
+    client->write("unknown command\n"); // Handle unknown commands
   }
 }
 
