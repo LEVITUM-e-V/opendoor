@@ -3,11 +3,13 @@
 #include <AsyncTCP.h>
 #include <cstdint>
 #include <cstring>
+#include "esp_wifi.h"
 #include <iterator>
 #include "WiFiType.h"
 #include "door_actuator.h"
 #include "config.h"
 #include "esp_timer.h"
+#include "esp_wifi_types.h"
 
 const size_t INITIAL_BUFFER_SIZE = 256;
 
@@ -157,8 +159,13 @@ void handleClient(void *arg, AsyncClient* client) {
 
 void setup() {
   Serial.begin(115200);
+
   delay(1000);
+
+  WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PSK);
+  esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_12M);
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
